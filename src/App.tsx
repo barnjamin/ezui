@@ -1,6 +1,5 @@
 import { MetaMaskSDK, SDKProvider } from "@metamask/sdk";
 import {
-  AttestationId,
   ChainAddress,
   SignAndSendSigner,
   TokenTransfer,
@@ -10,7 +9,7 @@ import {
   encoding,
   nativeChainAddress,
   normalizeAmount,
-  toChainId,
+  toChainId
 } from "@wormhole-foundation/connect-sdk";
 import {
   EvmPlatform,
@@ -113,7 +112,7 @@ function App() {
         dstTxIds={dstTxIds} 
       />
       <div className="card">
-        <button onClick={finish} disabled={!transfer}>
+        <button onClick={finish} disabled={attestations.length==0}>
           Complete transfer
         </button>
       </div>
