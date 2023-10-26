@@ -37,17 +37,19 @@ function App() {
   const msk = new MetaMaskSDK();
   const wh = new Wormhole(NETWORK, [EvmPlatform]);
 
-  function updateSignerFromProvider(provider: SDKProvider){
-      MetaMaskSigner.fromProvider(provider).then((signer)=>{
+  function updateSignerFromProvider(provider: SDKProvider) {
+    MetaMaskSigner.fromProvider(provider)
+      .then((signer) => {
         setCurrentAddress(signer.address());
         setCurrentChain(signer.chain());
         setSigner(signer);
-      }).catch((e)=>{
-        console.error(e)
-        setCurrentAddress(null);
-        setCurrentChain(null)
-        setSigner(null);
       })
+      .catch((e) => {
+        console.error(e);
+        setCurrentAddress(null);
+        setCurrentChain(null);
+        setSigner(null);
+      });
   }
 
   useEffect(() => {
@@ -117,8 +119,15 @@ function App() {
   return (
     <>
       <div className="card">
-        <p><b>Connected to Metamask?:</b> {currentChain !== null?"Yes":"No (make sure you have a Testnet network selected)"}</p>
-        <p>{currentChain}: {currentAddress}</p>
+        <p>
+          <b>Connected to Metamask?:</b>{" "}
+          {currentChain !== null
+            ? "Yes"
+            : "No (make sure you have a Testnet network selected)"}
+        </p>
+        <p>
+          {currentChain}: {currentAddress}
+        </p>
       </div>
       <div className="card">
         <button onClick={start} disabled={srcTxIds.length > 0}>
@@ -148,16 +157,28 @@ type TransferProps = {
 };
 
 function TransferDetailsCard(props: TransferProps) {
-  if (!props.details) return <div className="card"><p>Click <b>Start Transfer</b> to initiate the transfer</p></div>;
+  if (!props.details)
+    return (
+      <div className="card">
+        <p>
+          Click <b>Start Transfer</b> to initiate the transfer
+        </p>
+      </div>
+    );
 
   const { details, srcTxIds, attestations, dstTxIds } = props;
   const token =
     details.token === "native" ? "Native" : details.token.address.toString();
+
   return (
     <div className="card">
       <h3>Transfer</h3>
-      <p>From: {details.from.chain} : {details.from.address.toString()}</p>
-      <p>To: {details.to.chain} : {details.to.address.toString()}</p>
+      <p>
+        From: {details.from.chain} : {details.from.address.toString()}
+      </p>
+      <p>
+        To: {details.to.chain} : {details.to.address.toString()}
+      </p>
       <p>Token: {token}</p>
       <p>Amount: {details.amount.toString()}</p>
       <hr />
@@ -170,13 +191,14 @@ function TransferDetailsCard(props: TransferProps) {
       <p>
         {attestations.length > 0
           ? attestations
-              .map(
-                (att) =>
-                  `${toChainId(att.chain)}/${encoding.stripPrefix(
-                    "0x",
-                    att.emitter.toString()
-                  )}/${att.sequence}`
-              )
+              .map((att) => {
+                const whChainId = toChainId(att.chain);
+                const emitter = encoding.stripPrefix(
+                  "0x",
+                  att.emitter.toString()
+                );
+                return `${whChainId}/${emitter}/${att.sequence}`;
+              })
               .join(", ")
           : "None"}
       </p>
