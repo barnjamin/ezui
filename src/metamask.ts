@@ -9,6 +9,7 @@ import {
     EvmPlatform,
 } from "@wormhole-foundation/connect-sdk-evm";
 import "./App.css";
+import { NETWORK } from "./consts";
 
 
 export class MetaMaskSigner implements SignAndSendSigner {
@@ -30,7 +31,10 @@ export class MetaMaskSigner implements SignAndSendSigner {
         });
         if (!chainResp) throw new Error("Could not retrieve chain id");
 
-        const [_, chain] = EvmPlatform.chainFromChainId(chainResp)
+        const [network, chain] = EvmPlatform.chainFromChainId(chainResp)
+
+        if (network !== NETWORK) throw new Error(`Invalid network, expected: ${NETWORK} got ${network}`)
+
         return new MetaMaskSigner(provider, acctResp[0]!, chain);
     }
 

@@ -18,6 +18,7 @@ import {
 import { useEffect, useState } from "react";
 import "./App.css";
 import { MetaMaskSigner } from "./metamask";
+import { NETWORK } from "./consts";
 
 function App() {
   const [provider, setProvider] = useState<SDKProvider | null>(null);
@@ -30,7 +31,7 @@ function App() {
   const [dstTxIds, setDstTxIds] = useState<string[]>([]);
 
   const msk = new MetaMaskSDK();
-  const wh = new Wormhole("Testnet", [EvmPlatform]);
+  const wh = new Wormhole(NETWORK, [EvmPlatform]);
 
   useEffect(() => {
     if (provider) return;
@@ -84,7 +85,7 @@ function App() {
     // Lookup the chain id for the network and chain we need 
     // to complete the transfer 
     const eip155ChainId = evmNetworkChainToEvmChainId(
-      "Testnet",
+      NETWORK,
       // @ts-ignore
       transfer.transfer.to.chain
     );
