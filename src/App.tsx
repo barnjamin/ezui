@@ -1,154 +1,174 @@
 import { MetaMaskSDK, SDKProvider } from "@metamask/sdk";
-import { useState, useEffect } from "react";
-import "./App.css";
 import {
+  AttestationId,
   ChainAddress,
-  ChainName,
-  Network,
   SignAndSendSigner,
-  UnsignedTransaction,
+  TokenTransfer,
+  TokenTransferDetails,
   Wormhole,
+  WormholeMessageId,
+  encoding,
   nativeChainAddress,
   normalizeAmount,
+  toChainId,
 } from "@wormhole-foundation/connect-sdk";
 import {
   EvmPlatform,
-  evmChainIdToNetworkChainPair,
+  evmNetworkChainToEvmChainId,
 } from "@wormhole-foundation/connect-sdk-evm";
-
-class MetaMaskSigner implements SignAndSendSigner {
-  private constructor(
-    private provider: SDKProvider,
-    private _address: string,
-    private network: Network,
-    private _chain: ChainName
-  ) {}
-
-  chain(): ChainName {
-    return this._chain;
-  }
-  address(): string {
-    return this._address;
-  }
-
-  async signAndSend(txs: UnsignedTransaction[]): Promise<string[]> {
-    console.log("Got transactions: ", txs);
-    const txids: string[] = [];
-    console.log("OK", await this.provider.request<string[]>({
-      method: "eth_requestAccounts",
-      params: [],
-    }));
-    for (const txn of txs) {
-      const tx = {
-        ...txn.transaction, 
-        value: "0x"+BigInt(txn.transaction.value).toString(16),
-        chainId: "0x"+BigInt(txn.transaction.chainId).toString(16)
-      }
-
-      const req = {
-        method: "eth_sendTransaction",
-        params: [tx],
-      }
-      console.log("Sending a request", req);
-      const txid = await this.provider.request<string>(req);
-      console.log(txid);
-      if (!txid) throw new Error("Could not sign transaction");
-      txids.push(txid);
-    }
-    return txids;
-  }
-
-  static async fromProvider(provider: SDKProvider) {
-    const acctResp = await provider.request<string[]>({
-      method: "eth_requestAccounts",
-      params: [],
-    });
-    if (acctResp === null || acctResp === undefined || acctResp.length === 0)
-      throw new Error("Could not retrieve accounts");
-
-    const chainResp = await provider.request<string>({
-      method: "eth_chainId",
-      params: [],
-    });
-    if (!chainResp) throw new Error("Could not retrieve chain id");
-
-    const eip155ChainId = BigInt(chainResp as string);
-    if (!evmChainIdToNetworkChainPair.has(eip155ChainId))
-      throw new Error("Unsupported chain");
-
-    const [network, chain] = evmChainIdToNetworkChainPair.get(eip155ChainId)!;
-    return new MetaMaskSigner(provider, acctResp[0]!, network, chain);
-  }
-}
+import { useEffect, useState } from "react";
+import "./App.css";
+import { MetaMaskSigner } from "./metamask";
 
 function App() {
   const [provider, setProvider] = useState<SDKProvider | null>(null);
   const [signer, setSigner] = useState<SignAndSendSigner | null>(null);
+  const [transfer, setTransfer] = useState<TokenTransfer | null>(null);
 
-  const msk = new MetaMaskSDK({
-    enableDebug: true,
-    dappMetadata: {
-      name: "Wormhole Testnet",
-      url: "https://wormhole.com",
-    },
-    logging: {
-      developerMode: true,
-      sdk: true,
-    },
-  });
+  const [transferDetails, setTransferDetails] = useState<TokenTransferDetails | null>(null);
+  const [srcTxIds, setSrcTxIds] = useState<string[]>([]);
+  const [attestations, setAttestations] = useState<WormholeMessageId[]>([]);
+  const [dstTxIds, setDstTxIds] = useState<string[]>([]);
+
+  const msk = new MetaMaskSDK();
   const wh = new Wormhole("Testnet", [EvmPlatform]);
 
   useEffect(() => {
     if (provider) return;
 
-    const connectAndGetProvider = async function () {
+    (async function () {
       await msk.connect();
       const provider = msk.getProvider();
-      MetaMaskSigner.fromProvider(provider).then((signer) => {
+
+      const signer = await MetaMaskSigner.fromProvider(provider);
+      setSigner(signer);
+
+      provider.on("chainChanged", async () => {
+        console.log("Chain changed, updating");
+        const signer = await MetaMaskSigner.fromProvider(provider);
         setSigner(signer);
       });
+
       setProvider(provider);
-    };
-    connectAndGetProvider().catch((e) => {
+    })().catch((e) => {
       console.error(e);
     });
   }, [provider]);
 
-  const doit = function () {
-    console.log("do it");
-    if (!signer) return;
-    console.log(signer);
+  async function start(): Promise<void> {
+    if (!signer) throw new Error("No signer");
+
+    // Create a transfer
     const chainCtx = wh.getChain(signer.chain());
     const amt = normalizeAmount("0.01", chainCtx.config.nativeTokenDecimals);
     const snd = nativeChainAddress(signer);
     const rcv = { ...snd, chain: "Ethereum" } as ChainAddress;
+    const xfer = await wh.tokenTransfer("native", amt, snd, rcv, false);
+    setTransfer(xfer);
+    setTransferDetails(xfer.transfer);
 
-    console.log(snd, rcv, amt);
+    // Start the transfer
+    const txids = await xfer.initiateTransfer(signer);
+    setSrcTxIds(txids);
 
-    async function doinIt() {
-      const xfer = await wh.tokenTransfer("native", amt, snd, rcv, false);
-      console.log(xfer);
-      const txids = await xfer.initiateTransfer(signer!);
-      console.log(txids);
-      const att = await xfer.fetchAttestation(60_000);
-      console.log(att);
-    }
+    // Wait for attestation to be available
+    const att = await xfer.fetchAttestation(60_000);
+    setAttestations(att as WormholeMessageId[])
+  }
 
-    doinIt()
-      .then((x) => {
-        console.log(x);
-      })
-      .catch((e) => {
-        console.error(e);
-      });
-  };
+  async function finish(): Promise<void> {
+    if (!transfer) throw new Error("No Current transfer");
+    if (!provider) throw new Error("No provider");
+    if (!signer) throw new Error("No signer");
+
+    // TODO:  get Network from provider? 
+    // Lookup the chain id for the network and chain we need 
+    // to complete the transfer 
+    const eip155ChainId = evmNetworkChainToEvmChainId(
+      "Testnet",
+      // @ts-ignore
+      transfer.transfer.to.chain
+    );
+    const chainId = encoding.bignum.encode(eip155ChainId, true);
+    // Ask the user to switch to this chain
+    await provider.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId }],
+    });
+
+    // Finish transfer with updated signer
+    const finalTxs = await transfer.completeTransfer(signer);
+    setDstTxIds(finalTxs)
+  }
 
   return (
     <>
       <div className="card">
-        <button onClick={doit}>Do it</button>
+        <button onClick={start}>Start transfer</button>
+      </div>
+      <TransferDetailsCard 
+        details={transferDetails} 
+        attestations={attestations} 
+        srcTxIds={srcTxIds} 
+        dstTxIds={dstTxIds} 
+      />
+      <div className="card">
+        <button onClick={finish} disabled={!transfer}>
+          Complete transfer
+        </button>
       </div>
     </>
+  );
+}
+
+
+type TransferProps = {
+  details: TokenTransferDetails | null
+  attestations: WormholeMessageId[]
+  srcTxIds: string[]
+  dstTxIds: string[]
+}
+
+function TransferDetailsCard(props: TransferProps) {
+  if(!props.details) return <div className="card"></div>
+
+  const { details, srcTxIds, attestations, dstTxIds } = props;
+  const token =
+    details.token === "native" ? "Native" : details.token.address.toString();
+  return (
+    <div className="card">
+      <h3>Transfer</h3>
+      <p>From: {details.from.address.toString()}</p>
+      <p>To: {details.to.address.toString()}</p>
+      <p>Token: {token}</p>
+      <p>Amount: {details.amount.toString()}</p>
+      <hr />
+      <h3>Source Transactions</h3>
+      <p>
+        {srcTxIds.length > 0
+          ? srcTxIds.map((t) => `${t}`).join(", ")
+          : "None"}
+      </p>
+      <hr />
+      <h3>Attestations</h3>
+      <p>
+        {attestations.length > 0
+          ? attestations 
+              .map(
+                (att) =>
+                  `${toChainId(att.chain)}/${encoding.stripPrefix("0x", att.emitter.toString())}/${att.sequence}`
+              )
+              .join(", ")
+          : "None"}
+      </p>
+      <h3>Destination Transactions</h3>
+      <p>
+        {dstTxIds.length > 0
+          ? dstTxIds.map((t) => `${t}`).join(", ")
+          : "None"}
+      </p>
+      <hr />
+    </div>
   );
 }
 
