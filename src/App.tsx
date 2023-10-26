@@ -9,7 +9,7 @@ import {
   encoding,
   nativeChainAddress,
   normalizeAmount,
-  toChainId
+  toChainId,
 } from "@wormhole-foundation/connect-sdk";
 import {
   EvmPlatform,
@@ -25,13 +25,30 @@ function App() {
   const [signer, setSigner] = useState<SignAndSendSigner | null>(null);
   const [transfer, setTransfer] = useState<TokenTransfer | null>(null);
 
-  const [transferDetails, setTransferDetails] = useState<TokenTransferDetails | null>(null);
+  const [transferDetails, setTransferDetails] =
+    useState<TokenTransferDetails | null>(null);
   const [srcTxIds, setSrcTxIds] = useState<string[]>([]);
   const [attestations, setAttestations] = useState<WormholeMessageId[]>([]);
   const [dstTxIds, setDstTxIds] = useState<string[]>([]);
 
+  const [currentChain, setCurrentChain] = useState<string | null>(null);
+  const [currentAddress, setCurrentAddress] = useState<string | null>(null);
+
   const msk = new MetaMaskSDK();
   const wh = new Wormhole(NETWORK, [EvmPlatform]);
+
+  function updateSignerFromProvider(provider: SDKProvider){
+      MetaMaskSigner.fromProvider(provider).then((signer)=>{
+        setCurrentAddress(signer.address());
+        setCurrentChain(signer.chain());
+        setSigner(signer);
+      }).catch((e)=>{
+        console.error(e)
+        setCurrentAddress(null);
+        setCurrentChain(null)
+        setSigner(null);
+      })
+  }
 
   useEffect(() => {
     if (provider) return;
@@ -40,13 +57,9 @@ function App() {
       await msk.connect();
       const provider = msk.getProvider();
 
-      const signer = await MetaMaskSigner.fromProvider(provider);
-      setSigner(signer);
-
-      provider.on("chainChanged", async () => {
-        console.log("Chain changed, updating");
-        const signer = await MetaMaskSigner.fromProvider(provider);
-        setSigner(signer);
+      updateSignerFromProvider(provider);
+      provider.on("chainChanged", () => {
+        updateSignerFromProvider(provider);
       });
 
       setProvider(provider);
@@ -73,7 +86,7 @@ function App() {
 
     // Wait for attestation to be available
     const att = await xfer.fetchAttestation(60_000);
-    setAttestations(att as WormholeMessageId[])
+    setAttestations(att as WormholeMessageId[]);
   }
 
   async function finish(): Promise<void> {
@@ -81,16 +94,16 @@ function App() {
     if (!provider) throw new Error("No provider");
     if (!signer) throw new Error("No signer");
 
-    // TODO:  get Network from provider? 
-    // Lookup the chain id for the network and chain we need 
-    // to complete the transfer 
+    // Lookup the chain id for the network and chain we need
+    // to complete the transfer
     const eip155ChainId = evmNetworkChainToEvmChainId(
       NETWORK,
       // @ts-ignore
       transfer.transfer.to.chain
     );
+
+    // Ask wallet to prompt the user to switch to this chain
     const chainId = encoding.bignum.encode(eip155ChainId, true);
-    // Ask the user to switch to this chain
     await provider.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId }],
@@ -98,22 +111,28 @@ function App() {
 
     // Finish transfer with updated signer
     const finalTxs = await transfer.completeTransfer(signer);
-    setDstTxIds(finalTxs)
+    setDstTxIds(finalTxs);
   }
 
   return (
     <>
       <div className="card">
-        <button onClick={start}>Start transfer</button>
+        <p><b>Connected to Metamask?:</b> {currentChain !== null?"Yes":"No (make sure you have a Testnet network selected)"}</p>
+        <p>{currentChain}: {currentAddress}</p>
       </div>
-      <TransferDetailsCard 
-        details={transferDetails} 
-        attestations={attestations} 
-        srcTxIds={srcTxIds} 
-        dstTxIds={dstTxIds} 
+      <div className="card">
+        <button onClick={start} disabled={srcTxIds.length > 0}>
+          Start transfer
+        </button>
+      </div>
+      <TransferDetailsCard
+        details={transferDetails}
+        attestations={attestations}
+        srcTxIds={srcTxIds}
+        dstTxIds={dstTxIds}
       />
       <div className="card">
-        <button onClick={finish} disabled={attestations.length==0}>
+        <button onClick={finish} disabled={attestations.length == 0}>
           Complete transfer
         </button>
       </div>
@@ -121,16 +140,15 @@ function App() {
   );
 }
 
-
 type TransferProps = {
-  details: TokenTransferDetails | null
-  attestations: WormholeMessageId[]
-  srcTxIds: string[]
-  dstTxIds: string[]
-}
+  details: TokenTransferDetails | null;
+  attestations: WormholeMessageId[];
+  srcTxIds: string[];
+  dstTxIds: string[];
+};
 
 function TransferDetailsCard(props: TransferProps) {
-  if(!props.details) return <div className="card"></div>
+  if (!props.details) return <div className="card"><p>Click <b>Start Transfer</b> to initiate the transfer</p></div>;
 
   const { details, srcTxIds, attestations, dstTxIds } = props;
   const token =
@@ -145,27 +163,26 @@ function TransferDetailsCard(props: TransferProps) {
       <hr />
       <h3>Source Transactions</h3>
       <p>
-        {srcTxIds.length > 0
-          ? srcTxIds.map((t) => `${t}`).join(", ")
-          : "None"}
+        {srcTxIds.length > 0 ? srcTxIds.map((t) => `${t}`).join(", ") : "None"}
       </p>
       <hr />
       <h3>Attestations</h3>
       <p>
         {attestations.length > 0
-          ? attestations 
+          ? attestations
               .map(
                 (att) =>
-                  `${toChainId(att.chain)}/${encoding.stripPrefix("0x", att.emitter.toString())}/${att.sequence}`
+                  `${toChainId(att.chain)}/${encoding.stripPrefix(
+                    "0x",
+                    att.emitter.toString()
+                  )}/${att.sequence}`
               )
               .join(", ")
           : "None"}
       </p>
       <h3>Destination Transactions</h3>
       <p>
-        {dstTxIds.length > 0
-          ? dstTxIds.map((t) => `${t}`).join(", ")
-          : "None"}
+        {dstTxIds.length > 0 ? dstTxIds.map((t) => `${t}`).join(", ") : "None"}
       </p>
       <hr />
     </div>
