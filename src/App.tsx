@@ -156,8 +156,8 @@ function TransferDetailsCard(props: TransferProps) {
   return (
     <div className="card">
       <h3>Transfer</h3>
-      <p>From: {details.from.address.toString()}</p>
-      <p>To: {details.to.address.toString()}</p>
+      <p>From: {details.from.chain} : {details.from.address.toString()}</p>
+      <p>To: {details.to.chain} : {details.to.address.toString()}</p>
       <p>Token: {token}</p>
       <p>Amount: {details.amount.toString()}</p>
       <hr />
