@@ -1,28 +1,28 @@
 import { MetaMaskSDK, SDKProvider } from "@metamask/sdk";
 import {
+  Chain,
   ChainAddress,
+  Network,
   SignAndSendSigner,
   TokenTransfer,
   TokenTransferDetails,
   Wormhole,
   WormholeMessageId,
+  amount,
   encoding,
-  nativeChainAddress,
-  normalizeAmount,
+  isNative,
+  nativeChainIds,
   toChainId,
-} from "@wormhole-foundation/connect-sdk";
-import {
-  EvmPlatform,
-  evmNetworkChainToEvmChainId,
-} from "@wormhole-foundation/connect-sdk-evm";
+} from "@wormhole-foundation/sdk";
+import { evm } from "@wormhole-foundation/sdk/evm";
 import { useEffect, useState } from "react";
 import "./App.css";
-import { MetaMaskSigner } from "./metamask";
 import { NETWORK } from "./consts";
+import { MetaMaskSigner } from "./metamask";
 
 function App() {
   const [provider, setProvider] = useState<SDKProvider | null>(null);
-  const [signer, setSigner] = useState<SignAndSendSigner | null>(null);
+  const [signer, setSigner] = useState<SignAndSendSigner<Network, Chain> | null>(null);
   const [transfer, setTransfer] = useState<TokenTransfer | null>(null);
 
   const [transferDetails, setTransferDetails] =
@@ -35,7 +35,7 @@ function App() {
   const [currentAddress, setCurrentAddress] = useState<string | null>(null);
 
   const msk = new MetaMaskSDK();
-  const wh = new Wormhole(NETWORK, [EvmPlatform]);
+  const wh = new Wormhole(NETWORK, [evm.Platform]);
 
   function updateSignerFromProvider(provider: SDKProvider) {
     MetaMaskSigner.fromProvider(provider)
@@ -75,10 +75,11 @@ function App() {
 
     // Create a transfer
     const chainCtx = wh.getChain(signer.chain());
-    const amt = normalizeAmount("0.01", chainCtx.config.nativeTokenDecimals);
-    const snd = nativeChainAddress(signer);
+    const amt = amount.parse("0.01", chainCtx.config.nativeTokenDecimals);
+    const snd = Wormhole.chainAddress(signer.chain(), signer.address());
+    const tkn = Wormhole.tokenId(chainCtx.chain, "native")
     const rcv = { ...snd, chain: "Ethereum" } as ChainAddress;
-    const xfer = await wh.tokenTransfer("native", amt, snd, rcv, false);
+    const xfer = await wh.tokenTransfer(tkn, amount.units(amt), snd, rcv, false);
     setTransfer(xfer);
     setTransferDetails(xfer.transfer);
 
@@ -98,11 +99,10 @@ function App() {
 
     // Lookup the chain id for the network and chain we need
     // to complete the transfer
-    const eip155ChainId = evmNetworkChainToEvmChainId(
+    const eip155ChainId = nativeChainIds.networkChainToNativeChainId.get(
       NETWORK,
-      // @ts-ignore
       transfer.transfer.to.chain
-    );
+    ) as bigint;
 
     // Ask wallet to prompt the user to switch to this chain
     const chainId = encoding.bignum.encode(eip155ChainId, true);
@@ -168,7 +168,7 @@ function TransferDetailsCard(props: TransferProps) {
 
   const { details, srcTxIds, attestations, dstTxIds } = props;
   const token =
-    details.token === "native" ? "Native" : details.token.address.toString();
+    isNative(details.token.address) ? "Native" : details.token.address.toString();
 
   return (
     <div className="card">
