@@ -15,6 +15,11 @@ import {
   toChainId,
 } from "@wormhole-foundation/sdk";
 import { evm } from "@wormhole-foundation/sdk/evm";
+import { solana } from "@wormhole-foundation/sdk/solana";
+import { algorand } from "@wormhole-foundation/sdk/algorand";
+import { cosmwasm } from "@wormhole-foundation/sdk/cosmwasm";
+import { aptos } from "@wormhole-foundation/sdk/aptos";
+import { sui } from "@wormhole-foundation/sdk/sui";
 import { useEffect, useState } from "react";
 import "./App.css";
 import { NETWORK } from "./consts";
@@ -22,7 +27,10 @@ import { MetaMaskSigner } from "./metamask";
 
 function App() {
   const [provider, setProvider] = useState<SDKProvider | null>(null);
-  const [signer, setSigner] = useState<SignAndSendSigner<Network, Chain> | null>(null);
+  const [signer, setSigner] = useState<SignAndSendSigner<
+    Network,
+    Chain
+  > | null>(null);
   const [transfer, setTransfer] = useState<TokenTransfer | null>(null);
 
   const [transferDetails, setTransferDetails] =
@@ -35,7 +43,14 @@ function App() {
   const [currentAddress, setCurrentAddress] = useState<string | null>(null);
 
   const msk = new MetaMaskSDK();
-  const wh = new Wormhole(NETWORK, [evm.Platform]);
+  const wh = new Wormhole(NETWORK, [
+    evm.Platform,
+    solana.Platform,
+    algorand.Platform,
+    cosmwasm.Platform,
+    aptos.Platform,
+    sui.Platform,
+  ]);
 
   function updateSignerFromProvider(provider: SDKProvider) {
     MetaMaskSigner.fromProvider(provider)
@@ -77,9 +92,15 @@ function App() {
     const chainCtx = wh.getChain(signer.chain());
     const amt = amount.parse("0.01", chainCtx.config.nativeTokenDecimals);
     const snd = Wormhole.chainAddress(signer.chain(), signer.address());
-    const tkn = Wormhole.tokenId(chainCtx.chain, "native")
-    const rcv = { ...snd, chain: "Ethereum" } as ChainAddress;
-    const xfer = await wh.tokenTransfer(tkn, amount.units(amt), snd, rcv, false);
+    const tkn = Wormhole.tokenId(chainCtx.chain, "native");
+    const rcv = { ...snd, chain: "Sepolia" } as ChainAddress;
+    const xfer = await wh.tokenTransfer(
+      tkn,
+      amount.units(amt),
+      snd,
+      rcv,
+      false
+    );
     setTransfer(xfer);
     setTransferDetails(xfer.transfer);
 
@@ -167,8 +188,9 @@ function TransferDetailsCard(props: TransferProps) {
     );
 
   const { details, srcTxIds, attestations, dstTxIds } = props;
-  const token =
-    isNative(details.token.address) ? "Native" : details.token.address.toString();
+  const token = isNative(details.token.address)
+    ? "Native"
+    : details.token.address.toString();
 
   return (
     <div className="card">
