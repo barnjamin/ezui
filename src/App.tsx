@@ -17,7 +17,6 @@ import {
 import { evm } from "@wormhole-foundation/sdk/evm";
 import { solana } from "@wormhole-foundation/sdk/solana";
 import { algorand } from "@wormhole-foundation/sdk/algorand";
-import { cosmwasm } from "@wormhole-foundation/sdk/cosmwasm";
 import { aptos } from "@wormhole-foundation/sdk/aptos";
 import { sui } from "@wormhole-foundation/sdk/sui";
 import { useEffect, useState } from "react";
@@ -47,7 +46,6 @@ function App() {
     evm.Platform,
     solana.Platform,
     algorand.Platform,
-    cosmwasm.Platform,
     aptos.Platform,
     sui.Platform,
   ]);
