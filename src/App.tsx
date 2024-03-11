@@ -13,6 +13,7 @@ import {
   isNative,
   nativeChainIds,
   toChainId,
+  wormhole,
 } from "@wormhole-foundation/sdk";
 import { evm } from "@wormhole-foundation/sdk/evm";
 import { solana } from "@wormhole-foundation/sdk/solana";
@@ -42,13 +43,15 @@ function App() {
   const [currentAddress, setCurrentAddress] = useState<string | null>(null);
 
   const msk = new MetaMaskSDK();
-  const wh = new Wormhole(NETWORK, [
-    evm.Platform,
-    solana.Platform,
-    algorand.Platform,
-    aptos.Platform,
-    sui.Platform,
-  ]);
+  const [wh, setWormhole] = useState<Wormhole<Network> | null>(null);
+
+  useEffect(() => {
+    if(wh) return;
+    wormhole(NETWORK, [evm, solana, algorand, aptos, sui]).then((wh) => {
+      setWormhole(wh)
+    })
+  })
+
 
   function updateSignerFromProvider(provider: SDKProvider) {
     MetaMaskSigner.fromProvider(provider)
@@ -85,6 +88,7 @@ function App() {
 
   async function start(): Promise<void> {
     if (!signer) throw new Error("No signer");
+    if(!wh) throw new Error("No wormhole")
 
     // Create a transfer
     const chainCtx = wh.getChain(signer.chain());

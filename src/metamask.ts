@@ -31,7 +31,7 @@ export class MetaMaskSigner implements SignAndSendSigner<Network, Chain> {
     });
     if (!chainResp) throw new Error("Could not retrieve chain id");
 
-    const [network, chain] = evm.Platform.chainFromChainId(chainResp);
+    const [network, chain] = (await evm()).Platform.chainFromChainId(chainResp);
 
     if (network !== NETWORK)
       throw new Error(`Invalid network, expected: ${NETWORK} got ${network}`);
