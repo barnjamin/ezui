@@ -6,9 +6,9 @@ import {
   UnsignedTransaction,
   encoding,
 } from "@wormhole-foundation/sdk";
-import { evm } from "@wormhole-foundation/sdk/evm";
+import evm from "@wormhole-foundation/sdk/evm";
 import "./App.css";
-import { NETWORK } from "./consts";
+import { NETWORK } from "./consts.ts";
 
 export class MetaMaskSigner implements SignAndSendSigner<Network, Chain> {
   private constructor(

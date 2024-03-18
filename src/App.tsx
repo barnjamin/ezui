@@ -15,15 +15,16 @@ import {
   toChainId,
   wormhole,
 } from "@wormhole-foundation/sdk";
-import { evm } from "@wormhole-foundation/sdk/evm";
-import { solana } from "@wormhole-foundation/sdk/solana";
-import { algorand } from "@wormhole-foundation/sdk/algorand";
-import { aptos } from "@wormhole-foundation/sdk/aptos";
-import { sui } from "@wormhole-foundation/sdk/sui";
+import  evm  from "@wormhole-foundation/sdk/evm";
+import  solana  from "@wormhole-foundation/sdk/solana";
+import  algorand  from "@wormhole-foundation/sdk/algorand";
+import  aptos  from "@wormhole-foundation/sdk/aptos";
+import  sui  from "@wormhole-foundation/sdk/sui";
 import { useEffect, useState } from "react";
 import "./App.css";
-import { NETWORK } from "./consts";
-import { MetaMaskSigner } from "./metamask";
+
+import { NETWORK } from "./consts.js";
+import { MetaMaskSigner } from "./metamask.ts";
 
 function App() {
   const [provider, setProvider] = useState<SDKProvider | null>(null);
