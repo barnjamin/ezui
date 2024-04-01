@@ -13,18 +13,16 @@ import {
   isNative,
   nativeChainIds,
   toChainId,
-  wormhole,
+  wormhole
 } from "@wormhole-foundation/sdk";
-import  evm  from "@wormhole-foundation/sdk/evm";
-import  solana  from "@wormhole-foundation/sdk/solana";
-import  algorand  from "@wormhole-foundation/sdk/algorand";
-import  aptos  from "@wormhole-foundation/sdk/aptos";
-import  sui  from "@wormhole-foundation/sdk/sui";
+
 import { useEffect, useState } from "react";
 import "./App.css";
 
 import { NETWORK } from "./consts.js";
 import { MetaMaskSigner } from "./metamask.ts";
+import solana from "@wormhole-foundation/sdk/solana";
+import evm from "@wormhole-foundation/sdk/evm";
 
 function App() {
   const [provider, setProvider] = useState<SDKProvider | null>(null);
@@ -44,15 +42,18 @@ function App() {
   const [currentAddress, setCurrentAddress] = useState<string | null>(null);
 
   const msk = new MetaMaskSDK();
+
+  // sync import, import directly from `@wormhole-foundation/sdk/platforms/evm` and `@wormhole-foundation/sdk/platforms/solana
+  //const [wh, _] = useState<Wormhole<Network> | null>(new Wormhole(NETWORK, [evm.Platform, solana.Platform]));
+
+  // async import, import from `@wormhole-foundation/sdk/evm` and `@wormhole-foundation/sdk/solana`
   const [wh, setWormhole] = useState<Wormhole<Network> | null>(null);
-
   useEffect(() => {
-    if(wh) return;
-    wormhole(NETWORK, [evm, solana, algorand, aptos, sui]).then((wh) => {
-      setWormhole(wh)
-    })
-  })
-
+    if (!wh)
+      wormhole(NETWORK, [evm, solana]).then(
+        setWormhole
+      );
+  });
 
   function updateSignerFromProvider(provider: SDKProvider) {
     MetaMaskSigner.fromProvider(provider)
@@ -89,7 +90,7 @@ function App() {
 
   async function start(): Promise<void> {
     if (!signer) throw new Error("No signer");
-    if(!wh) throw new Error("No wormhole")
+    if (!wh) throw new Error("No wormhole");
 
     // Create a transfer
     const chainCtx = wh.getChain(signer.chain());
