@@ -40,13 +40,8 @@ function App() {
 
   const [currentChain, setCurrentChain] = useState<string | null>(null);
   const [currentAddress, setCurrentAddress] = useState<string | null>(null);
-
   const msk = new MetaMaskSDK();
 
-  // sync import, import directly from `@wormhole-foundation/sdk/platforms/evm` and `@wormhole-foundation/sdk/platforms/solana
-  //const [wh, _] = useState<Wormhole<Network> | null>(new Wormhole(NETWORK, [evm.Platform, solana.Platform]));
-
-  // async import, import from `@wormhole-foundation/sdk/evm` and `@wormhole-foundation/sdk/solana`
   const [wh, setWormhole] = useState<Wormhole<Network> | null>(null);
   useEffect(() => {
     if (!wh)
