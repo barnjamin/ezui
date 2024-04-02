@@ -1,9 +1,10 @@
-Connect SDK Web Wallet Demo
+Wormhole SDK Web Wallet Demo
 ---------------------------
 
-This demo should serve as an example of how a web wallet can be wrapped to provide one of the `Signer` interfaces required by the [Connect SDK](https://github.com/wormhole-foundation/connect-sdk).
+This demo should serve as an example of how a web wallet can be wrapped to provide one of the `Signer` interfaces required by the [Wormhole SDK](https://github.com/wormhole-foundation/wormhole-sdk-ts).
 
-See the [MetaMaskSigner](src/metamask.ts) for an example of a `SignAndSendSigner`
+See the [MetaMaskSigner](src/metamask.ts) for an example of a `SignAndSendSigner` using Metamask
+See the [PhantomSigner](src/phantom.ts) for an example of a `SignAndSendSigner` using Phantom
 
 
 :warning: This demo is not very user friendly (no ability to change transfer params in UI) nor pretty (I'm bad at this). :warning:
