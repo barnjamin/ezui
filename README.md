@@ -17,9 +17,9 @@ npm install
 npm run dev
 ```
 
-0) Connect metamask when prompted 
+0) Connect metamask/phantom when prompted 
 
-    > Note: Use a `Testnet` account that is _not_ `Goerli` (e.g. `Fuji`) since the transfer is sending to `Goerli` by default
+    > Note: This example uses Testnet by default, update the const to change this 
 
 1) Click `Start Transfer` and sign the transaction when prompted
 2) Wait for the transfer to be mined and the VAA to be available

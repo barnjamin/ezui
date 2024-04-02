@@ -1,105 +1,135 @@
 import { MetaMaskSDK, SDKProvider } from "@metamask/sdk";
 import {
   Chain,
-  ChainAddress,
   Network,
   SignAndSendSigner,
+  Signer,
   TokenTransfer,
   TokenTransferDetails,
   Wormhole,
   WormholeMessageId,
   amount,
+  chainToPlatform,
   encoding,
   isNative,
-  nativeChainIds,
   toChainId,
-  wormhole
+  wormhole,
 } from "@wormhole-foundation/sdk";
-
+import evm from "@wormhole-foundation/sdk/evm";
+import solana from "@wormhole-foundation/sdk/solana";
 import { useEffect, useState } from "react";
-import "./App.css";
 
+import "./App.css";
 import { NETWORK } from "./consts.js";
 import { MetaMaskSigner } from "./metamask.ts";
-import solana from "@wormhole-foundation/sdk/solana";
-import evm from "@wormhole-foundation/sdk/evm";
+import { PhantomProvider, PhantomSigner } from "./phantom.ts";
 
+const msk = new MetaMaskSDK();
 function App() {
-  const [provider, setProvider] = useState<SDKProvider | null>(null);
-  const [signer, setSigner] = useState<SignAndSendSigner<
+  const [evmProvider, setEvmProvider] = useState<SDKProvider | null>(null);
+  const [evmSigner, setEvmSigner] = useState<SignAndSendSigner<
     Network,
     Chain
   > | null>(null);
-  const [transfer, setTransfer] = useState<TokenTransfer | null>(null);
 
+  const [phantomProvider, setPhantomProvider] =
+    useState<PhantomProvider | null>(null);
+  const [solSigner, setSolSigner] = useState<SignAndSendSigner<
+    Network,
+    Chain
+  > | null>(null);
+
+  // TODO: hardcoded for now, later allow selection of chains
+  const [srcChain] = useState<Chain>("Avalanche");
+  const [dstChain] = useState<Chain>("Solana");
+
+  function getSigner(chain: Chain): Signer {
+    const isEvm = chainToPlatform(chain) === "Evm"
+    const s =  isEvm? evmSigner : solSigner;
+    if(!s) throw new Error("No signer for: "+ chain)
+    if(isEvm){
+      (s as MetaMaskSigner).requestChainChange(chain)
+    }
+    return s
+  }
+
+  function getAddresses()  {
+    try {
+    const srcAddress = getSigner(srcChain).address();
+    const dstAddress = getSigner(dstChain).address();
+    return { [srcChain]: srcAddress, [dstChain]: dstAddress };
+    }catch {}
+    return { [srcChain]: "Not connected", [dstChain]: "Not connected" };
+  }
+
+  // Set once the transfer is started
+  const [transfer, setTransfer] = useState<TokenTransfer | null>(null);
   const [transferDetails, setTransferDetails] =
     useState<TokenTransferDetails | null>(null);
   const [srcTxIds, setSrcTxIds] = useState<string[]>([]);
+  // Set once the transfer is attested
   const [attestations, setAttestations] = useState<WormholeMessageId[]>([]);
+  // Set after completing transfer
   const [dstTxIds, setDstTxIds] = useState<string[]>([]);
-
-  const [currentChain, setCurrentChain] = useState<string | null>(null);
-  const [currentAddress, setCurrentAddress] = useState<string | null>(null);
-  const msk = new MetaMaskSDK();
 
   const [wh, setWormhole] = useState<Wormhole<Network> | null>(null);
   useEffect(() => {
-    if (!wh)
-      wormhole(NETWORK, [evm, solana]).then(
-        setWormhole
-      );
+    if (!wh) wormhole(NETWORK, [evm, solana]).then(setWormhole);
   });
 
-  function updateSignerFromProvider(provider: SDKProvider) {
-    MetaMaskSigner.fromProvider(provider)
-      .then((signer) => {
-        setCurrentAddress(signer.address());
-        setCurrentChain(signer.chain());
-        setSigner(signer);
-      })
-      .catch((e) => {
-        console.error(e);
-        setCurrentAddress(null);
-        setCurrentChain(null);
-        setSigner(null);
-      });
-  }
-
+  // Effect for phantom/solana
   useEffect(() => {
-    if (provider) return;
-
+    if (phantomProvider || !("phantom" in window) || !wh) return;
     (async function () {
-      await msk.connect();
-      const provider = msk.getProvider();
+      // @ts-ignore
+      const provider = window.phantom!.solana as PhantomProvider;
+      if (!provider?.isPhantom) return;
 
-      updateSignerFromProvider(provider);
-      provider.on("chainChanged", () => {
-        updateSignerFromProvider(provider);
+      await provider.connect();
+      await PhantomSigner.fromProvider(wh!, provider).then((signer) => {
+        setSolSigner(signer);
       });
-
-      setProvider(provider);
+      setPhantomProvider(provider);
     })().catch((e) => {
       console.error(e);
     });
-  }, [provider]);
+  }, [phantomProvider, wh]);
+
+  // Effect for metamask/evm
+  useEffect(() => {
+    if (evmProvider) return;
+    (async function () {
+      await msk.connect();
+      const provider = msk.getProvider();
+      await MetaMaskSigner.fromProvider(provider).then((signer) => {
+        setEvmSigner(signer);
+      });
+      setEvmProvider(provider);
+    })().catch((e) => {
+      console.error(e);
+    });
+  }, [evmProvider, wh]);
 
   async function start(): Promise<void> {
-    if (!signer) throw new Error("No signer");
     if (!wh) throw new Error("No wormhole");
+
+    const signer = getSigner(srcChain)
+    if (!signer) throw new Error("No signer");
+
 
     // Create a transfer
     const chainCtx = wh.getChain(signer.chain());
-    const amt = amount.parse("0.01", chainCtx.config.nativeTokenDecimals);
+    const amt = amount.units(
+      amount.parse("0.01", chainCtx.config.nativeTokenDecimals)
+    );
     const snd = Wormhole.chainAddress(signer.chain(), signer.address());
     const tkn = Wormhole.tokenId(chainCtx.chain, "native");
-    const rcv = { ...snd, chain: "Sepolia" } as ChainAddress;
-    const xfer = await wh.tokenTransfer(
-      tkn,
-      amount.units(amt),
-      snd,
-      rcv,
-      false
-    );
+
+    const dstSigner = getSigner(dstChain)
+    const rcv = Wormhole.chainAddress(dstSigner.chain(), dstSigner.address());
+    const xfer = await wh.tokenTransfer(tkn, amt, snd, rcv, false);
+
+    // Update state
     setTransfer(xfer);
     setTransferDetails(xfer.transfer);
 
@@ -113,23 +143,11 @@ function App() {
   }
 
   async function finish(): Promise<void> {
+    if (!wh) throw new Error("No wormhole");
     if (!transfer) throw new Error("No Current transfer");
-    if (!provider) throw new Error("No provider");
+
+    const signer = dstChain === "Solana" ? solSigner : evmSigner;
     if (!signer) throw new Error("No signer");
-
-    // Lookup the chain id for the network and chain we need
-    // to complete the transfer
-    const eip155ChainId = nativeChainIds.networkChainToNativeChainId.get(
-      NETWORK,
-      transfer.transfer.to.chain
-    ) as bigint;
-
-    // Ask wallet to prompt the user to switch to this chain
-    const chainId = encoding.bignum.encode(eip155ChainId, true);
-    await provider.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId }],
-    });
 
     // Finish transfer with updated signer
     const finalTxs = await transfer.completeTransfer(signer);
@@ -140,20 +158,19 @@ function App() {
     <>
       <div className="card">
         <p>
-          <b>Connected to Metamask?:</b>{" "}
-          {currentChain !== null
-            ? "Yes"
-            : "No (make sure you have a Testnet network selected)"}
+          {srcChain}: {getAddresses()[srcChain]}{" "}
         </p>
         <p>
-          {currentChain}: {currentAddress}
+          {dstChain}: {getAddresses()[dstChain]}{" "}
         </p>
       </div>
+
       <div className="card">
         <button onClick={start} disabled={srcTxIds.length > 0}>
           Start transfer
         </button>
       </div>
+
       <TransferDetailsCard
         details={transferDetails}
         attestations={attestations}
