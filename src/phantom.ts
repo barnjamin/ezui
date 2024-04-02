@@ -102,8 +102,6 @@ export class PhantomSigner implements SignAndSendSigner<Network, Chain> {
         signers?: Keypair[];
       };
 
-      console.log(tx, signers);
-
       // Set recent blockhash
       const { blockhash } = await this.connection.getLatestBlockhash();
       tx.recentBlockhash = blockhash;
@@ -111,7 +109,7 @@ export class PhantomSigner implements SignAndSendSigner<Network, Chain> {
       // Partial sign with any signers passed in
       // NOTE: this _must_ come after any modifications to the transaction
       // otherwise, the signature wont verify
-      tx.partialSign(...(signers ?? []));
+      if (signers && signers.length > 0) tx.partialSign(...signers);
 
       const { signature: txid } =
         await this.provider.signAndSendTransaction(tx);
@@ -121,6 +119,13 @@ export class PhantomSigner implements SignAndSendSigner<Network, Chain> {
 
       txids.push(txid);
     }
+
+    // Make sure they're all finalized
+    await Promise.all(
+      txids.map(async (txid) =>
+        this.connection.confirmTransaction(txid, "finalized")
+      )
+    );
 
     return txids;
   }
