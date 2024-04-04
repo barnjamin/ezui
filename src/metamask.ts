@@ -9,7 +9,6 @@ import {
 } from "@wormhole-foundation/sdk";
 import "./App.css";
 import { NETWORK } from "./consts.ts";
-import evm from "@wormhole-foundation/sdk/platforms/evm";
 
 export class MetaMaskSigner implements SignAndSendSigner<Network, Chain> {
   private constructor(
@@ -32,6 +31,8 @@ export class MetaMaskSigner implements SignAndSendSigner<Network, Chain> {
     });
     if (!chainResp) throw new Error("Could not retrieve chain id");
 
+    const evm = (await import("@wormhole-foundation/sdk/platforms/evm"))
+      .default;
     const [network, chain] = evm.Platform.chainFromChainId(chainResp);
     if (network !== NETWORK)
       throw new Error(`Invalid network, expected: ${NETWORK} got ${network}`);
