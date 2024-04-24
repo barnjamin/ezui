@@ -13,7 +13,7 @@ import {
   encoding,
   isNative,
   toChainId,
-  wormhole,
+  wormhole
 } from "@wormhole-foundation/sdk";
 import evm from "@wormhole-foundation/sdk/evm";
 import solana from "@wormhole-foundation/sdk/solana";
@@ -74,6 +74,7 @@ function App() {
   const [dstTxIds, setDstTxIds] = useState<string[]>([]);
 
   const [wh, setWormhole] = useState<Wormhole<Network> | null>(null);
+
   useEffect(() => {
     if (!wh) wormhole(NETWORK, [evm, solana]).then(setWormhole);
   });
