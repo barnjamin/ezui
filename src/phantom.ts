@@ -60,6 +60,14 @@ export interface PhantomProvider {
   request: (method: PhantomRequestMethod, params: any) => Promise<unknown>;
 }
 
+// TODO: is this really not provided by web3.js?
+export function isVersionedTransaction(tx: any): tx is VersionedTransaction {
+  return (
+    (<VersionedTransaction>tx).signatures !== undefined &&
+    (<VersionedTransaction>tx).message !== undefined
+  );
+}
+
 export class PhantomSigner implements SignAndSendSigner<Network, Chain> {
   private constructor(
     private connection: Connection,
@@ -94,22 +102,30 @@ export class PhantomSigner implements SignAndSendSigner<Network, Chain> {
     const txids: string[] = [];
 
     for (const txn of txs) {
-      const { description, transaction } = txn;
+      const { description, transaction } = txn as UnsignedTransaction<
+        Network,
+        "Solana"
+      >;
       console.log(`Signing ${description}`);
 
       const { transaction: tx, signers } = transaction as {
-        transaction: Transaction;
+        transaction: Transaction | VersionedTransaction;
         signers?: Keypair[];
       };
 
       // Set recent blockhash
       const { blockhash } = await this.connection.getLatestBlockhash();
-      tx.recentBlockhash = blockhash;
+      if (isVersionedTransaction(tx)) {
+        tx.message.recentBlockhash = blockhash;
+        if (signers && signers.length > 0) tx.sign(signers);
+      } else {
+        transaction.recentBlockhash = blockhash;
+        if (signers && signers.length > 0) tx.partialSign(...signers);
+      }
 
       // Partial sign with any signers passed in
       // NOTE: this _must_ come after any modifications to the transaction
       // otherwise, the signature wont verify
-      if (signers && signers.length > 0) tx.partialSign(...signers);
 
       const { signature: txid } =
         await this.provider.signAndSendTransaction(tx);
